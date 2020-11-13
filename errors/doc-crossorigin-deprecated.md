@@ -11,10 +11,10 @@ Add the config option:
 ```js
 // next.config.js
 module.exports = {
-  crossOrigin: 'anonymous'
+  crossOrigin: 'anonymous',
 }
 ```
 
 ### Useful Links
 
-- [The issue this was reported in: #5674](https://github.com/zeit/next.js/issues/5674)
+- [The issue this was reported in: #5674](https://github.com/vercel/next.js/issues/5674)

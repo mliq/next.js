@@ -2,11 +2,11 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import { kea } from 'kea'
 
-@kea({
+const logic = kea({
   path: () => ['kea'],
   actions: () => ({
-    increment: amount => ({ amount }),
-    decrement: amount => ({ amount })
+    increment: (amount) => ({ amount }),
+    decrement: (amount) => ({ amount }),
   }),
   reducers: ({ actions }) => ({
     counter: [
@@ -14,19 +14,21 @@ import { kea } from 'kea'
       PropTypes.number,
       {
         [actions.increment]: (state, payload) => state + payload.amount,
-        [actions.decrement]: (state, payload) => state - payload.amount
-      }
-    ]
+        [actions.decrement]: (state, payload) => state - payload.amount,
+      },
+    ],
   }),
   selectors: ({ selectors }) => ({
     doubleCounter: [
       () => [selectors.counter],
-      counter => counter * 2,
-      PropTypes.number
-    ]
-  })
+      (counter) => counter * 2,
+      PropTypes.number,
+    ],
+  }),
 })
-export default class App extends React.Component {
+
+@logic
+class Index extends React.Component {
   render() {
     return (
       <div>
@@ -41,3 +43,5 @@ export default class App extends React.Component {
     )
   }
 }
+
+export default Index

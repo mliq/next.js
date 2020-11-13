@@ -1,19 +1,13 @@
-import { connect } from 'react-redux'
 import Clock from './clock'
 import Counter from './counter'
 
-function Examples ({ lastUpdate, light }) {
+const Examples = () => {
   return (
-    <div>
-      <Clock lastUpdate={lastUpdate} light={light} />
+    <div style={{ marginBottom: 10 }}>
+      <Clock />
       <Counter />
     </div>
   )
 }
 
-function mapStateToProps (state) {
-  const { lastUpdate, light } = state
-  return { lastUpdate, light }
-}
-
-export default connect(mapStateToProps)(Examples)
+export default Examples

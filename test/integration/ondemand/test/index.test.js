@@ -1,8 +1,7 @@
 /* eslint-env jest */
-/* global jasmine */
-import { join, resolve } from 'path'
-import { existsSync } from 'fs'
+
 import webdriver from 'next-webdriver'
+import { join } from 'path'
 import AbortController from 'abort-controller'
 import {
   renderViaHTTP,
@@ -12,37 +11,43 @@ import {
   killApp,
   waitFor,
   check,
-  getBrowserBodyText
+  getBrowserBodyText,
+  getPageFileFromBuildManifest,
+  getBuildManifest,
 } from 'next-test-utils'
 
+const appDir = join(__dirname, '../')
 const context = {}
 
-const doPing = page => {
+const doPing = (page) => {
   const controller = new AbortController()
   const signal = controller.signal
-  return fetchViaHTTP(context.appPort, '/_next/on-demand-entries-ping', { page }, { signal })
-    .then(res => {
-      res.body.on('data', chunk => {
-        try {
-          const payload = JSON.parse(chunk.toString().split('data:')[1])
-          if (payload.success || payload.invalid) {
-            controller.abort()
-          }
-        } catch (_) {}
-      })
+  return fetchViaHTTP(
+    context.appPort,
+    '/_next/webpack-hmr',
+    { page },
+    { signal }
+  ).then((res) => {
+    res.body.on('data', (chunk) => {
+      try {
+        const payload = JSON.parse(chunk.toString().split('data:')[1])
+        if (payload.success || payload.invalid) {
+          controller.abort()
+        }
+      } catch (_) {}
     })
+  })
 }
 
-jasmine.DEFAULT_TIMEOUT_INTERVAL = 1000 * 60 * 5
+jest.setTimeout(1000 * 60 * 5)
 
 describe('On Demand Entries', () => {
   it('should pass', () => {})
   beforeAll(async () => {
     context.appPort = await findPort()
-    context.server = await launchApp(join(__dirname, '../'), context.appPort)
+    context.server = await launchApp(appDir, context.appPort)
   })
   afterAll(() => {
-    context.ws.close()
     killApp(context.server)
   })
 
@@ -55,34 +60,40 @@ describe('On Demand Entries', () => {
   })
 
   it('should compile pages for JSON page requests', async () => {
+    await renderViaHTTP(context.appPort, '/about')
+    const pageFile = getPageFileFromBuildManifest(appDir, '/about')
     const pageContent = await renderViaHTTP(
       context.appPort,
-      '/_next/static/development/pages/about.js'
+      join('/_next', pageFile)
     )
     expect(pageContent.includes('About Page')).toBeTruthy()
   })
 
   it('should dispose inactive pages', async () => {
-    const indexPagePath = resolve(__dirname, '../.next/static/development/pages/index.js')
-    expect(existsSync(indexPagePath)).toBeTruthy()
+    await renderViaHTTP(context.appPort, '/')
+    await doPing('/')
 
     // Render two pages after the index, since the server keeps at least two pages
     await renderViaHTTP(context.appPort, '/about')
     await doPing('/about')
-    const aboutPagePath = resolve(__dirname, '../.next/static/development/pages/about.js')
 
     await renderViaHTTP(context.appPort, '/third')
     await doPing('/third')
-    const thirdPagePath = resolve(__dirname, '../.next/static/development/pages/third.js')
 
-    // Wait maximum of jasmine.DEFAULT_TIMEOUT_INTERVAL checking
+    // Wait maximum of jest.setTimeout checking
     // for disposing /about
-    while (true) {
+    for (let i = 0; i < 30; ++i) {
       await waitFor(1000 * 1)
-      // Assert that the two lastly demanded page are not disposed
-      expect(existsSync(aboutPagePath)).toBeTruthy()
-      expect(existsSync(thirdPagePath)).toBeTruthy()
-      if (!existsSync(indexPagePath)) return
+      try {
+        const buildManifest = getBuildManifest(appDir)
+        // Assert that the two lastly demanded page are not disposed
+        expect(buildManifest.pages['/']).toBeUndefined()
+        expect(buildManifest.pages['/about']).toBeDefined()
+        expect(buildManifest.pages['/third']).toBeDefined()
+        return
+      } catch (err) {
+        continue
+      }
     }
   })
 
@@ -99,7 +110,7 @@ describe('On Demand Entries', () => {
       }, /Hello/)
     } finally {
       if (browser) {
-        browser.close()
+        await browser.close()
       }
     }
   })

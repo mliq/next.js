@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import { resolve } from 'path'
-import arg from 'arg'
+import arg from 'next/dist/compiled/arg/index.js'
 import startServer from '../server/lib/start-server'
+import { printAndExit } from '../server/lib/utils'
 import { cliCommand } from '../bin/next'
+import * as Log from '../build/output/log'
 
 const nextStart: cliCommand = (argv) => {
-  const args = arg({
+  const validArgs: arg.Spec = {
     // Types
     '--help': Boolean,
     '--port': Number,
@@ -16,10 +18,17 @@ const nextStart: cliCommand = (argv) => {
     '-h': '--help',
     '-p': '--port',
     '-H': '--hostname',
-  }, { argv })
-
+  }
+  let args: arg.Result<arg.Spec>
+  try {
+    args = arg(validArgs, { argv })
+  } catch (error) {
+    if (error.code === 'ARG_UNKNOWN_OPTION') {
+      return printAndExit(error.message, 1)
+    }
+    throw error
+  }
   if (args['--help']) {
-    // tslint:disable-next-line
     console.log(`
       Description
         Starts the application in production mode.
@@ -28,10 +37,8 @@ const nextStart: cliCommand = (argv) => {
       Usage
         $ next start <dir> -p <port>
 
-      <dir> is the directory that contains the compiled dist folder
-      created by running \`next build\`.
-      If no directory is provided, the current directory will be assumed.
-      You can set a custom dist folder in config https://github.com/zeit/next.js#custom-configuration
+      <dir> represents the directory of the Next.js application.
+      If no directory is provided, the current directory will be used.
 
       Options
         --port, -p      A port number on which to start the application
@@ -43,14 +50,14 @@ const nextStart: cliCommand = (argv) => {
 
   const dir = resolve(args._[0] || '.')
   const port = args['--port'] || 3000
-  startServer({dir}, port, args['--hostname'])
+  startServer({ dir }, port, args['--hostname'])
     .then(async (app) => {
-      // tslint:disable-next-line
-      console.log(`> Ready on http://${args['--hostname'] || 'localhost'}:${port}`)
+      Log.ready(
+        `started server on http://${args['--hostname'] || 'localhost'}:${port}`
+      )
       await app.prepare()
     })
     .catch((err) => {
-      // tslint:disable-next-line
       console.error(err)
       process.exit(1)
     })

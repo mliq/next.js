@@ -1,19 +1,11 @@
-import React from 'react'
-import Document, { Head, Main, NextScript } from 'next/document'
-import flush from 'styled-jsx/server'
+import Document, { Html, Head, Main, NextScript } from 'next/document'
 
 import { GA_TRACKING_ID } from '../lib/gtag'
 
-export default class extends Document {
-  static getInitialProps ({ renderPage }) {
-    const { html, head, errorHtml, chunks } = renderPage()
-    const styles = flush()
-    return { html, head, errorHtml, chunks, styles }
-  }
-
-  render () {
+export default class MyDocument extends Document {
+  render() {
     return (
-      <html>
+      <Html>
         <Head>
           {/* Global Site Tag (gtag.js) - Google Analytics */}
           <script
@@ -27,8 +19,10 @@ export default class extends Document {
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
 
-            gtag('config', '${GA_TRACKING_ID}');
-          `
+            gtag('config', '${GA_TRACKING_ID}', {
+              page_path: window.location.pathname,
+            });
+          `,
             }}
           />
         </Head>
@@ -36,7 +30,7 @@ export default class extends Document {
           <Main />
           <NextScript />
         </body>
-      </html>
+      </Html>
     )
   }
 }

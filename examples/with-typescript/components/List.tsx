@@ -1,12 +1,12 @@
-import * as React from "react"
+import * as React from 'react'
 import ListItem from './ListItem'
-import IDataObject from '../interfaces'
+import { User } from '../interfaces'
 
 type Props = {
-  items: IDataObject[],
+  items: User[]
 }
 
-const List: React.FunctionComponent<Props> = ({ items }) => (
+const List = ({ items }: Props) => (
   <ul>
     {items.map((item) => (
       <li key={item.id}>

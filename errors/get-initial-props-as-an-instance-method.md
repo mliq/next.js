@@ -10,11 +10,11 @@ Use the static keyword.
 
 ```js
 export default class YourEntryComponent extends React.Component {
-  static getInitialProps () {
+  static getInitialProps() {
     return {}
   }
 
-  render () {
+  render() {
     return 'foo'
   }
 }
@@ -36,4 +36,4 @@ export default YourEntryComponent
 
 ### Useful Links
 
-- [Fetching data and component lifecycle](https://github.com/zeit/next.js#fetching-data-and-component-lifecycle)
+- [Fetching data and component lifecycle](https://nextjs.org/docs/api-reference/data-fetching/getInitialProps)

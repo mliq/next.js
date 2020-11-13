@@ -1,13 +1,12 @@
-'use strict'
-
 module.exports = {
+  // this will become default in jest 27:
+  testRunner: 'jest-circus/runner',
   testMatch: ['**/*.test.js'],
   verbose: true,
-  bail: true,
-  testEnvironment: 'node',
   rootDir: 'test',
   modulePaths: ['<rootDir>/lib'],
   globalSetup: '<rootDir>/jest-global-setup.js',
   globalTeardown: '<rootDir>/jest-global-teardown.js',
-  coverageReporters: ['text', 'lcov', 'cobertura']
+  setupFilesAfterEnv: ['<rootDir>/jest-setup-after-env.js'],
+  testEnvironment: '<rootDir>/jest-environment.js',
 }

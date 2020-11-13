@@ -1,34 +1,40 @@
 import chalk from 'chalk'
+import stripAnsi from 'next/dist/compiled/strip-ansi'
 import textTable from 'next/dist/compiled/text-table'
 import createStore from 'next/dist/compiled/unistore'
-import stripAnsi from 'strip-ansi'
-
-import formatWebpackMessages from '../../client/dev-error-overlay/format-webpack-messages'
+import formatWebpackMessages from '../../client/dev/error-overlay/format-webpack-messages'
 import { OutputState, store as consoleStore } from './store'
 
 export function startedDevelopmentServer(appUrl: string) {
   consoleStore.setState({ appUrl })
 }
 
-let previousClient: any = null
-let previousServer: any = null
+let previousClient: import('webpack').Compiler | null = null
+let previousServer: import('webpack').Compiler | null = null
+
+type CompilerDiagnosticsWithFile = {
+  errors: { file: string | undefined; message: string }[] | null
+  warnings: { file: string | undefined; message: string }[] | null
+}
+
+type CompilerDiagnostics = {
+  errors: string[] | null
+  warnings: string[] | null
+}
 
 type WebpackStatus =
   | { loading: true }
-  | {
-      loading: false
-      errors: string[] | null
-      warnings: string[] | null
-    }
+  | ({ loading: false } & CompilerDiagnostics)
 
 type AmpStatus = {
   message: string
   line: number
   col: number
   specUrl: string | null
+  code: string
 }
 
-type AmpPageStatus = {
+export type AmpPageStatus = {
   [page: string]: { errors: AmpStatus[]; warnings: AmpStatus[] }
 }
 
@@ -41,8 +47,8 @@ type BuildStatusStore = {
 enum WebpackStatusPhase {
   COMPILING = 1,
   COMPILED_WITH_ERRORS = 2,
-  COMPILED_WITH_WARNINGS = 3,
-  COMPILED = 4,
+  COMPILED_WITH_WARNINGS = 4,
+  COMPILED = 5,
 }
 
 function getWebpackStatusPhase(status: WebpackStatus): WebpackStatusPhase {
@@ -58,7 +64,7 @@ function getWebpackStatusPhase(status: WebpackStatus): WebpackStatusPhase {
   return WebpackStatusPhase.COMPILED
 }
 
-function formatAmpMessages(amp: AmpPageStatus) {
+export function formatAmpMessages(amp: AmpPageStatus) {
   let output = chalk.bold('Amp Validation') + '\n\n'
   let messages: string[][] = []
 
@@ -73,7 +79,16 @@ function formatAmpMessages(amp: AmpPageStatus) {
   }
 
   for (const page in amp) {
-    const { errors, warnings } = amp[page]
+    let { errors, warnings } = amp[page]
+
+    const devOnlyFilter = (err: AmpStatus) => err.code !== 'DEV_MODE_ONLY'
+    errors = errors.filter(devOnlyFilter)
+    warnings = warnings.filter(devOnlyFilter)
+    if (!(errors.length || warnings.length)) {
+      // Skip page with no non-dev warnings
+      continue
+    }
+
     if (errors.length) {
       ampError(page, errors[0])
       for (let index = 1; index < errors.length; ++index) {
@@ -89,6 +104,10 @@ function formatAmpMessages(amp: AmpPageStatus) {
     messages.push(['', '', '', ''])
   }
 
+  if (!messages.length) {
+    return ''
+  }
+
   output += textTable(messages, {
     align: ['l', 'l', 'l', 'l'],
     stringLength(str: string) {
@@ -101,7 +120,7 @@ function formatAmpMessages(amp: AmpPageStatus) {
 
 const buildStore = createStore<BuildStatusStore>()
 
-buildStore.subscribe(state => {
+buildStore.subscribe((state) => {
   const { amp, client, server } = state
 
   const [{ status }] = [
@@ -127,12 +146,21 @@ buildStore.subscribe(state => {
   } else {
     let { errors, warnings } = status
 
-    if (errors == null && Object.keys(amp).length > 0) {
-      warnings = (warnings || []).concat(formatAmpMessages(amp))
+    if (errors == null) {
+      if (Object.keys(amp).length > 0) {
+        warnings = (warnings || []).concat(formatAmpMessages(amp) || [])
+        if (!warnings.length) warnings = null
+      }
     }
 
     consoleStore.setState(
-      { ...partialState, loading: false, errors, warnings } as OutputState,
+      {
+        ...partialState,
+        loading: false,
+        typeChecking: false,
+        errors,
+        warnings,
+      } as OutputState,
       true
     )
   }
@@ -147,9 +175,10 @@ export function ampValidation(
   if (!(errors.length || warnings.length)) {
     buildStore.setState({
       amp: Object.keys(amp)
-        .filter(k => k !== page)
+        .filter((k) => k !== page)
         .sort()
-        .reduce((a, c) => ((a[c] = amp[c]), a), {} as any),
+        // eslint-disable-next-line no-sequences
+        .reduce((a, c) => ((a[c] = amp[c]), a), {} as AmpPageStatus),
     })
     return
   }
@@ -158,11 +187,15 @@ export function ampValidation(
   buildStore.setState({
     amp: Object.keys(newAmp)
       .sort()
-      .reduce((a, c) => ((a[c] = newAmp[c]), a), {} as any),
+      // eslint-disable-next-line no-sequences
+      .reduce((a, c) => ((a[c] = newAmp[c]), a), {} as AmpPageStatus),
   })
 }
 
-export function watchCompiler(client: any, server: any) {
+export function watchCompilers(
+  client: import('webpack').Compiler,
+  server: import('webpack').Compiler
+) {
   if (previousClient === client && previousServer === server) {
     return
   }
@@ -181,25 +214,31 @@ export function watchCompiler(client: any, server: any) {
       onEvent({ loading: true })
     })
 
-    compiler.hooks.done.tap(`NextJsDone-${key}`, (stats: any) => {
-      buildStore.setState({ amp: {} })
+    compiler.hooks.done.tap(
+      `NextJsDone-${key}`,
+      (stats: import('webpack').Stats) => {
+        buildStore.setState({ amp: {} })
 
-      const { errors, warnings } = formatWebpackMessages(
-        stats.toJson({ all: false, warnings: true, errors: true })
-      )
+        const { errors, warnings } = formatWebpackMessages(
+          stats.toJson({ all: false, warnings: true, errors: true })
+        )
 
-      onEvent({
-        loading: false,
-        errors: errors && errors.length ? errors : null,
-        warnings: warnings && warnings.length ? warnings : null,
-      })
-    })
+        const hasErrors = !!errors?.length
+        const hasWarnings = !!warnings?.length
+
+        onEvent({
+          loading: false,
+          errors: hasErrors ? errors : null,
+          warnings: hasWarnings ? warnings : null,
+        })
+      }
+    )
   }
 
-  tapCompiler('client', client, status =>
+  tapCompiler('client', client, (status) =>
     buildStore.setState({ client: status })
   )
-  tapCompiler('server', server, status =>
+  tapCompiler('server', server, (status) =>
     buildStore.setState({ server: status })
   )
 

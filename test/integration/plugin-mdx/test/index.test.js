@@ -1,15 +1,10 @@
 /* eslint-env jest */
-/* global jasmine */
+
 import { join } from 'path'
-import {
-  renderViaHTTP,
-  findPort,
-  launchApp,
-  killApp
-} from 'next-test-utils'
+import { renderViaHTTP, findPort, launchApp, killApp } from 'next-test-utils'
 
 const context = {}
-jasmine.DEFAULT_TIMEOUT_INTERVAL = 1000 * 60 * 5
+jest.setTimeout(1000 * 60 * 5)
 
 describe('Configuration', () => {
   beforeAll(async () => {
@@ -26,7 +21,9 @@ describe('Configuration', () => {
     })
 
     it('should render an MDX page with component correctly', async () => {
-      expect(await renderViaHTTP(context.appPort, '/button')).toMatch(/Look, a button!/)
+      expect(await renderViaHTTP(context.appPort, '/button')).toMatch(
+        /Look, a button!/
+      )
     })
   })
 })
